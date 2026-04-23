@@ -28,7 +28,7 @@
 
         <div class="lp-actions">
             <a href="{{ url_for('register') }}" class="lp-btn-dark">Create free account</a>
-            <a href="{{ url_for('login') }}" class="lp-btn-dark">See how it works</a>
+            <button id="open-video-modal" class="lp-btn-dark">See how it works</button>
         </div>
 
         <div class="lp-dashboard">
@@ -109,4 +109,60 @@
     </div>
 </section>
 
+<!-- Video modal -->
+<div id="video-modal" class="vm-overlay" aria-hidden="true">
+    <div class="vm-box" role="dialog" aria-label="How it works video">
+        <button class="vm-close" id="close-video-modal" aria-label="Close">&times;</button>
+        <div class="vm-embed">
+            <iframe
+                id="video-iframe"
+                src=""
+                data-src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+                title="How Spendly works"
+                frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen>
+            </iframe>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const overlay  = document.getElementById('video-modal');
+    const iframe   = document.getElementById('video-iframe');
+    const openBtn  = document.getElementById('open-video-modal');
+    const closeBtn = document.getElementById('close-video-modal');
+
+    function openModal() {
+        iframe.src = iframe.dataset.src;
+        overlay.setAttribute('aria-hidden', 'false');
+        overlay.classList.add('vm-visible');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+        iframe.src = '';          // stops the video immediately
+        overlay.setAttribute('aria-hidden', 'true');
+        overlay.classList.remove('vm-visible');
+        document.body.style.overflow = '';
+    }
+
+    openBtn.addEventListener('click', openModal);
+    closeBtn.addEventListener('click', closeModal);
+
+    // Click outside the box closes the modal
+    overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) closeModal();
+    });
+
+    // Escape key closes the modal
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && overlay.classList.contains('vm-visible')) closeModal();
+    });
+}());
+</script>
 {% endblock %}
