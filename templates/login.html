@@ -8,8 +8,8 @@
     <div class="auth-container">
 
         <div class="auth-header">
-            <h1 class="auth-title">Welcome back</h1>
-            <p class="auth-subtitle">Sign in to your Spendly account</p>
+            <h1 class="auth-title">Sign in</h1>
+            <p class="auth-subtitle">Welcome back to Spendly.</p>
         </div>
 
         <div class="auth-card">
@@ -17,7 +17,7 @@
             <div class="auth-error">{{ error }}</div>
             {% endif %}
 
-            <form method="POST" action="/login">
+            <form method="POST" action="{{ url_for('login') }}">
                 <div class="form-group">
                     <label for="email">Email address</label>
                     <input type="email" id="email" name="email"
@@ -36,7 +36,7 @@
 
         <p class="auth-switch">
             Don't have an account?
-            <a href="{{ url_for('register') }}">Create one free</a>
+            <a href="{{ url_for('register') }}">Sign up</a>
         </p>
 
     </div>
