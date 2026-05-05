@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     {% block head %}{% endblock %}
+    <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
 
@@ -20,6 +21,7 @@
             </a>
             <div class="nav-links">
                 {% if session.get("user_id") %}
+                <a href="{{ url_for('profile') }}">Profile</a>
                 <a href="{{ url_for('logout') }}">Logout</a>
                 {% else %}
                 <a href="{{ url_for('login') }}">Sign in</a>
@@ -44,5 +46,6 @@
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     {% block scripts %}{% endblock %}
+    <script>lucide.createIcons();</script>
 </body>
 </html>
