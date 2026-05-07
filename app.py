@@ -1,7 +1,8 @@
 import sqlite3
+from datetime import datetime
 from flask import Flask, render_template, redirect, url_for, session, request
 from werkzeug.security import generate_password_hash, check_password_hash
-from database.db import get_db, init_db, seed_db
+from database.db import get_db, init_db, seed_db, close_db
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-change-in-prod"
@@ -107,35 +108,84 @@ def logout():
     return redirect(url_for("landing"))
 
 
+# ------------------------------------------------------------------ #
+# Profile helpers — implemented in Step 05                            #
+# ------------------------------------------------------------------ #
+
+def _get_user(conn, user_id):
+    row = conn.execute(
+        "SELECT name, email, created_at FROM users WHERE id = ?",
+        (user_id,),
+    ).fetchone()
+    member_since = datetime.strptime(row["created_at"], "%Y-%m-%d %H:%M:%S").strftime("%B %Y")
+    return {"name": row["name"], "email": row["email"], "member_since": member_since}
+
+
+def _get_summary_stats(conn, user_id):
+    agg = conn.execute(
+        "SELECT SUM(amount) as total, COUNT(*) as cnt FROM expenses WHERE user_id = ?",
+        (user_id,),
+    ).fetchone()
+    total = agg["total"] or 0.0
+    top_row = conn.execute(
+        "SELECT category FROM expenses WHERE user_id = ? "
+        "GROUP BY category ORDER BY SUM(amount) DESC LIMIT 1",
+        (user_id,),
+    ).fetchone()
+    return {
+        "total_spent": f"₹{total:,.2f}",
+        "transaction_count": agg["cnt"],
+        "top_category": top_row["category"] if top_row else "—",
+    }
+
+
+def _get_transaction_history(conn, user_id):
+    rows = conn.execute(
+        "SELECT amount, category, date, description "
+        "FROM expenses WHERE user_id = ? ORDER BY date DESC LIMIT 5",
+        (user_id,),
+    ).fetchall()
+    return [
+        {
+            "date": datetime.strptime(r["date"], "%Y-%m-%d").strftime("%b %d"),
+            "description": r["description"] or "",
+            "category": r["category"],
+            "amount": f"₹{r['amount']:,.2f}",
+        }
+        for r in rows
+    ]
+
+
+def _get_category_breakdown(conn, user_id):
+    rows = conn.execute(
+        "SELECT category, SUM(amount) as total FROM expenses "
+        "WHERE user_id = ? GROUP BY category ORDER BY total DESC",
+        (user_id,),
+    ).fetchall()
+    grand_total = sum(r["total"] for r in rows)
+    return [
+        {
+            "name": r["category"],
+            "total": f"₹{r['total']:,.2f}",
+            "percent": int(r["total"] / grand_total * 100) if grand_total else 0,
+        }
+        for r in rows
+    ]
+
+
 @app.route("/profile")
 def profile():
     if not session.get("user_id"):
         return redirect(url_for("login"))
-
-    user = {
-        "name": "Alex Rivera",
-        "email": "alex@example.com",
-        "member_since": "January 2024",
-    }
-    stats = {
-        "total_spent": "₹4,380.00",
-        "transaction_count": 24,
-        "top_category": "Food",
-    }
-    transactions = [
-        {"date": "Apr 25", "description": "Coffee and snacks",  "category": "Food",          "amount": "₹9.99"},
-        {"date": "Apr 20", "description": "Miscellaneous",      "category": "Other",         "amount": "₹15.75"},
-        {"date": "Apr 16", "description": "New shirt",          "category": "Shopping",      "amount": "₹85.00"},
-        {"date": "Apr 13", "description": "Movie tickets",      "category": "Entertainment", "amount": "₹20.00"},
-        {"date": "Apr 10", "description": "Pharmacy",           "category": "Health",        "amount": "₹45.00"},
-    ]
-    categories = [
-        {"name": "Bills",         "total": "₹120.00", "percent": 48},
-        {"name": "Shopping",      "total": "₹85.00",  "percent": 34},
-        {"name": "Health",        "total": "₹45.00",  "percent": 18},
-        {"name": "Transport",     "total": "₹35.00",  "percent": 14},
-        {"name": "Entertainment", "total": "₹20.00",  "percent": 8},
-    ]
+    user_id = session["user_id"]
+    conn = get_db()
+    try:
+        user         = _get_user(conn, user_id)
+        stats        = _get_summary_stats(conn, user_id)
+        transactions = _get_transaction_history(conn, user_id)
+        categories   = _get_category_breakdown(conn, user_id)
+    finally:
+        close_db(conn)
     return render_template("profile.html",
                            user=user, stats=stats,
                            transactions=transactions,
