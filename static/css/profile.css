@@ -297,6 +297,95 @@
 }
 
 /* ------------------------------------------------------------------ */
+/* Date filter bar                                                     */
+/* ------------------------------------------------------------------ */
+
+.profile-filter-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+}
+
+.filter-presets {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.filter-btn {
+    display: inline-block;
+    padding: 0.3rem 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-family: var(--font-body);
+    color: var(--ink-muted);
+    text-decoration: none;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.filter-btn:hover {
+    border-color: var(--ink-soft);
+    color: var(--ink);
+}
+
+.filter-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--paper-card);
+}
+
+.filter-form {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    flex-wrap: wrap;
+}
+
+.filter-form label {
+    font-size: 0.8rem;
+    color: var(--ink-muted);
+}
+
+.filter-form input[type="date"] {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 0.3rem 0.6rem;
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    color: var(--ink);
+    background: var(--paper);
+    outline: none;
+}
+
+.filter-form input[type="date"]:focus {
+    border-color: var(--accent);
+}
+
+.filter-apply-btn {
+    padding: 0.3rem 0.9rem;
+    background: var(--ink);
+    color: var(--paper-card);
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.filter-apply-btn:hover {
+    background: var(--accent);
+}
+
+.filter-showing {
+    font-size: 0.8rem;
+    color: var(--ink-muted);
+    margin: 0;
+}
+
+/* ------------------------------------------------------------------ */
 /* Responsive                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -318,5 +407,10 @@
 
     .profile-since-badge {
         margin: 0 auto;
+    }
+
+    .filter-form {
+        flex-direction: column;
+        align-items: flex-start;
     }
 }
