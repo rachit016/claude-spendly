@@ -25,6 +25,23 @@
         </div>
     </div>
 
+    <!-- Date filter bar -->
+    <div class="profile-filter-bar card">
+        <div class="filter-presets">
+            <a href="{{ url_this_month }}" class="filter-btn{% if active_period == 'This Month' %} active{% endif %}">This Month</a>
+            <a href="{{ url_last_3m }}" class="filter-btn{% if active_period == 'Last 3 Months' %} active{% endif %}">Last 3 Months</a>
+            <a href="{{ url_all_time }}" class="filter-btn{% if active_period == 'All Time' %} active{% endif %}">All Time</a>
+        </div>
+        <form class="filter-form" method="GET" action="{{ url_for('profile') }}">
+            <label for="filter-from">From</label>
+            <input type="date" id="filter-from" name="from" value="{{ date_from or '' }}">
+            <label for="filter-to">To</label>
+            <input type="date" id="filter-to" name="to" value="{{ date_to or '' }}">
+            <button type="submit" class="filter-apply-btn">Apply</button>
+        </form>
+        <p class="filter-showing">Showing: {{ showing_label }}</p>
+    </div>
+
     <!-- Stats row -->
     <div class="profile-stats">
         <div class="stat-card card">

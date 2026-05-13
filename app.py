@@ -1,5 +1,5 @@
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask, render_template, redirect, url_for, session, request
 from werkzeug.security import generate_password_hash, check_password_hash
 from database.db import get_db, init_db, seed_db, close_db
@@ -51,10 +51,10 @@ def register():
         conn.commit()
         user_id = cursor.lastrowid
     except sqlite3.IntegrityError:
-        conn.close()
         return render_template("register.html", error="An account with that email already exists.")
+    finally:
+        close_db(conn)
 
-    conn.close()
     session["user_id"] = user_id
     session["user_name"] = name
     return redirect(url_for("profile"))
@@ -74,11 +74,13 @@ def login():
         return render_template("login.html", error="All fields are required.")
 
     conn = get_db()
-    row = conn.execute(
-        "SELECT id, name, password_hash FROM users WHERE email = ?",
-        (email,),
-    ).fetchone()
-    conn.close()
+    try:
+        row = conn.execute(
+            "SELECT id, name, password_hash FROM users WHERE email = ?",
+            (email,),
+        ).fetchone()
+    finally:
+        close_db(conn)
 
     if row is None or not check_password_hash(row["password_hash"], password):
         return render_template("login.html", error="Invalid email or password.")
@@ -121,16 +123,27 @@ def _get_user(conn, user_id):
     return {"name": row["name"], "email": row["email"], "member_since": member_since}
 
 
-def _get_summary_stats(conn, user_id):
+def _build_date_clause(date_from, date_to):
+    if date_from and date_to:
+        return " AND date BETWEEN ? AND ?", (date_from, date_to)
+    if date_from:
+        return " AND date >= ?", (date_from,)
+    if date_to:
+        return " AND date <= ?", (date_to,)
+    return "", ()
+
+
+def _get_summary_stats(conn, user_id, date_from=None, date_to=None):
+    clause, params = _build_date_clause(date_from, date_to)
     agg = conn.execute(
-        "SELECT SUM(amount) as total, COUNT(*) as cnt FROM expenses WHERE user_id = ?",
-        (user_id,),
+        f"SELECT SUM(amount) as total, COUNT(*) as cnt FROM expenses WHERE user_id = ?{clause}",
+        (user_id,) + params,
     ).fetchone()
     total = agg["total"] or 0.0
     top_row = conn.execute(
-        "SELECT category FROM expenses WHERE user_id = ? "
+        f"SELECT category FROM expenses WHERE user_id = ?{clause} "
         "GROUP BY category ORDER BY SUM(amount) DESC LIMIT 1",
-        (user_id,),
+        (user_id,) + params,
     ).fetchone()
     return {
         "total_spent": f"₹{total:,.2f}",
@@ -139,11 +152,13 @@ def _get_summary_stats(conn, user_id):
     }
 
 
-def _get_transaction_history(conn, user_id):
+def _get_transaction_history(conn, user_id, date_from=None, date_to=None):
+    clause, params = _build_date_clause(date_from, date_to)
+    limit = "" if (date_from or date_to) else " LIMIT 5"
     rows = conn.execute(
-        "SELECT amount, category, date, description "
-        "FROM expenses WHERE user_id = ? ORDER BY date DESC LIMIT 5",
-        (user_id,),
+        f"SELECT amount, category, date, description "
+        f"FROM expenses WHERE user_id = ?{clause} ORDER BY date DESC{limit}",
+        (user_id,) + params,
     ).fetchall()
     return [
         {
@@ -156,11 +171,12 @@ def _get_transaction_history(conn, user_id):
     ]
 
 
-def _get_category_breakdown(conn, user_id):
+def _get_category_breakdown(conn, user_id, date_from=None, date_to=None):
+    clause, params = _build_date_clause(date_from, date_to)
     rows = conn.execute(
-        "SELECT category, SUM(amount) as total FROM expenses "
-        "WHERE user_id = ? GROUP BY category ORDER BY total DESC",
-        (user_id,),
+        f"SELECT category, SUM(amount) as total FROM expenses "
+        f"WHERE user_id = ?{clause} GROUP BY category ORDER BY total DESC",
+        (user_id,) + params,
     ).fetchall()
     grand_total = sum(r["total"] for r in rows)
     return [
@@ -178,18 +194,62 @@ def profile():
     if not session.get("user_id"):
         return redirect(url_for("login"))
     user_id = session["user_id"]
+
+    def _parse_date(val):
+        if not val:
+            return None
+        try:
+            datetime.strptime(val, "%Y-%m-%d")
+            return val
+        except ValueError:
+            return None
+
+    date_from = _parse_date(request.args.get("from"))
+    date_to   = _parse_date(request.args.get("to"))
+
+    today = datetime.today()
+    this_month_from = today.replace(day=1).strftime("%Y-%m-%d")
+    this_month_to   = today.strftime("%Y-%m-%d")
+    last_3m_from    = (today - timedelta(days=90)).strftime("%Y-%m-%d")
+    last_3m_to      = today.strftime("%Y-%m-%d")
+
+    if date_from is None and date_to is None:
+        active_period = "All Time"
+        showing_label = "All Time"
+    elif date_from == this_month_from and date_to == this_month_to:
+        active_period = "This Month"
+        showing_label = today.strftime("%B %Y")
+    elif date_from == last_3m_from and date_to == last_3m_to:
+        active_period = "Last 3 Months"
+        showing_label = f"{(today - timedelta(days=90)).strftime('%b %d, %Y')} – {today.strftime('%b %d, %Y')}"
+    else:
+        active_period = "Custom"
+        parts = [p for p in [date_from, date_to] if p]
+        showing_label = " – ".join(parts)
+
+    url_this_month = url_for("profile", **{"from": this_month_from, "to": this_month_to})
+    url_last_3m    = url_for("profile", **{"from": last_3m_from, "to": last_3m_to})
+    url_all_time   = url_for("profile")
+
     conn = get_db()
     try:
         user         = _get_user(conn, user_id)
-        stats        = _get_summary_stats(conn, user_id)
-        transactions = _get_transaction_history(conn, user_id)
-        categories   = _get_category_breakdown(conn, user_id)
+        stats        = _get_summary_stats(conn, user_id, date_from, date_to)
+        transactions = _get_transaction_history(conn, user_id, date_from, date_to)
+        categories   = _get_category_breakdown(conn, user_id, date_from, date_to)
     finally:
         close_db(conn)
     return render_template("profile.html",
                            user=user, stats=stats,
                            transactions=transactions,
-                           categories=categories)
+                           categories=categories,
+                           date_from=date_from,
+                           date_to=date_to,
+                           active_period=active_period,
+                           showing_label=showing_label,
+                           url_this_month=url_this_month,
+                           url_last_3m=url_last_3m,
+                           url_all_time=url_all_time)
 
 
 @app.route("/expenses/add")
