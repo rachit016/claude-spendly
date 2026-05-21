@@ -252,6 +252,13 @@ def profile():
                            url_all_time=url_all_time)
 
 
+@app.route("/analytics")
+def analytics():
+    if not session.get("user_id"):
+        return redirect(url_for("login"))
+    return render_template("analytics.html")
+
+
 @app.route("/expenses/add")
 def add_expense():
     return "Add expense — coming in Step 7"
