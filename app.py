@@ -1,3 +1,4 @@
+import os
 import sqlite3
 from datetime import datetime, timedelta
 from flask import Flask, render_template, redirect, url_for, session, request
@@ -6,6 +7,8 @@ from database.db import get_db, init_db, seed_db, close_db
 
 app = Flask(__name__)
 app.secret_key = "dev-secret-change-in-prod"
+
+VALID_CATEGORIES = ["Food", "Transport", "Bills", "Health", "Entertainment", "Shopping", "Other"]
 
 with app.app_context():
     init_db()
@@ -252,9 +255,58 @@ def profile():
                            url_all_time=url_all_time)
 
 
-@app.route("/expenses/add")
+@app.route("/analytics")
+def analytics():
+    if not session.get("user_id"):
+        return redirect(url_for("login"))
+    return render_template("analytics.html")
+
+
+def _render_add_expense(form, error=None):
+    return render_template("add_expense.html", categories=VALID_CATEGORIES, form=form, error=error)
+
+
+@app.route("/expenses/add", methods=["GET", "POST"])
 def add_expense():
-    return "Add expense — coming in Step 7"
+    if not session.get("user_id"):
+        return redirect(url_for("login"))
+
+    if request.method == "GET":
+        return _render_add_expense(form={})
+
+    amount_raw = request.form.get("amount", "").strip()
+    category = request.form.get("category", "")
+    expense_date = request.form.get("date", "").strip()
+    description = request.form.get("description", "").strip()
+
+    form = {"amount": amount_raw, "category": category, "date": expense_date, "description": description}
+
+    try:
+        amount = float(amount_raw)
+        if amount <= 0:
+            raise ValueError
+    except ValueError:
+        return _render_add_expense(form, error="Amount must be a positive number.")
+
+    if category not in VALID_CATEGORIES:
+        return _render_add_expense(form, error="Please select a valid category.")
+
+    try:
+        datetime.strptime(expense_date, "%Y-%m-%d")
+    except ValueError:
+        return _render_add_expense(form, error="Please enter a valid date.")
+
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT INTO expenses (user_id, amount, category, date, description) VALUES (?, ?, ?, ?, ?)",
+            (session["user_id"], amount, category, expense_date, description or None),
+        )
+        conn.commit()
+    finally:
+        close_db(conn)
+
+    return redirect(url_for("profile"))
 
 
 @app.route("/expenses/<int:id>/edit")
@@ -268,4 +320,4 @@ def delete_expense(id):
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    app.run(debug=os.environ.get("FLASK_DEBUG", "0") == "1", port=5001)
